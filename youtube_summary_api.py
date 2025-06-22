@@ -3,6 +3,7 @@ from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, No
 import requests
 import re
 import openai  # Optional
+import sys
 
 app = Flask(__name__)
 
@@ -25,19 +26,20 @@ def get_video_title(video_id):
         return "Unknown Title"
 
 def get_transcript(video_id):
+        print("In get_transcript", file=sys.stderr, flush=True)
     try:
-        print("Available transcripts:")
+        print("Available transcripts:", file=sys.stderr, flush=True)
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         for transcript in transcript_list:
-            print(f" - {transcript.language} (auto-generated: {transcript.is_generated})")
+            print(f" - {transcript.language} (auto-generated: {transcript.is_generated})", file=sys.stderr, flush=True)
 
         transcript = transcript_list.find_transcript(['en', 'en-US'])
         return ' '.join([entry.text for entry in transcript.fetch()])
     except (NoTranscriptFound):
-        print("NoTranscriptFound error")
+        print("NoTranscriptFound error", file=sys.stderr, flush=True)
         return None
     except (TranscriptsDisabled):
-        print("TranscriptsDisabled error")
+        print("TranscriptsDisabled error", file=sys.stderr, flush=True)
         return None
     except Exception as e:
         print("Transcript fetch error:", e)
