@@ -1,85 +1,80 @@
 from flask import Flask, request, jsonify
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
-import openai
+import yt_dlp
 import re
-import os
+import openai  # Optional
 
 app = Flask(__name__)
 
-# Set your OpenAI API key as environment variable before running
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Optional: Set your OpenAI key
+openai.api_key = 'YOUR_OPENAI_API_KEY'  # Or use env vars
 
 def extract_video_id(url):
-    # Extracts video ID from YouTube URL (supports various formats)
-    regex = r"(?:v=|\/)([0-9A-Za-z_-]{11}).*"
-    match = re.search(regex, url)
-    if match:
-        return match.group(1)
-    return None
+    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
+    return match.group(1) if match else None
 
 def get_video_title(video_id):
-    # Simple way to get video title by calling YouTube oEmbed API (no auth needed)
-    import requests
-    oembed_url = f"https://www.youtube.com/oembed?url=http://www.youtube.com/watch?v={video_id}&format=json"
-    resp = requests.get(oembed_url)
-    if resp.status_code == 200:
-        return resp.json().get("title")
-    return None
+    ydl_opts = {'quiet': True, 'skip_download': True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+        return info.get('title', 'Unknown Title')
+
+#def get_transcript(video_id):
+#    try:
+#        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
+#        return ' '.join([entry.text for entry in transcript])
+#    except (TranscriptsDisabled, NoTranscriptFound):
+#        return None
+#    except Exception as e:
+#        print("Error fetching transcript:", e)
+#        return None
 
 def get_transcript(video_id):
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-        return ' '.join([entry.text for entry in transcript])
-    except (TranscriptsDisabled, NoTranscriptFound):
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript = transcript_list.find_transcript(['en', 'en-US'])
+        return ' '.join([entry.text for entry in transcript.fetch()])
+    except (TranscriptsDisabled, NoTranscriptFound) as e:
         return None
-    except Exception as e:
-        print("Error fetching transcript:", e)
-        return None
-
-def summarize_with_openai(text):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant who summarizes YouTube video transcripts."},
-                {"role": "user", "content": f"Summarize this transcript briefly:\n\n{text}"}
-            ],
-            max_tokens=150,
-            temperature=0.7,
-        )
-        summary = response.choices[0].message['content'].strip()
-        return summary
-    except Exception as e:
-        print("OpenAI API error:", e)
-        return None
+        
+def summarize_with_openai(transcript):
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant who summarizes YouTube transcripts."},
+            {"role": "user", "content": f"Please summarize the following transcript:\n\n{transcript}"}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
 @app.route('/summarize', methods=['POST'])
 def summarize():
     data = request.get_json()
     if not data or 'youtube_url' not in data:
-        return jsonify({'error': 'Missing youtube_url in request'}), 400
+        return jsonify({'error': 'Invalid or missing JSON body'}), 400
+    url = data.get('youtube_url')
+    if not url:
+        return jsonify({'error': 'Missing youtube_url'}), 400
 
-    url = data['youtube_url']
     video_id = extract_video_id(url)
     if not video_id:
         return jsonify({'error': 'Invalid YouTube URL'}), 400
 
     title = get_video_title(video_id)
-    if not title:
-        title = "Unknown Title"
-
     transcript = get_transcript(video_id)
+
     if not transcript:
         return jsonify({'error': 'Transcript not available'}), 404
 
-    summary = summarize_with_openai(transcript)
-    if not summary:
-        return jsonify({'error': 'Failed to summarize transcript'}), 500
+    # If you want just the transcript:
+    return jsonify({'title': title, 'transcript': transcript})
 
-    return jsonify({
-        'title': title,
-        'summary': summary
-    })
+    # Or if you want the summary:
+    # summary = summarize_with_openai(transcript)
+    # return jsonify({'title': title, 'summary': summary})
+
+#if __name__ == '__main__':
+#    app.run(debug=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
