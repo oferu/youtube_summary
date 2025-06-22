@@ -42,7 +42,7 @@ def get_transcript(video_id):
         print("TranscriptsDisabled error", file=sys.stderr, flush=True)
         return None
     except Exception as e:
-        print("Transcript fetch error:", e)
+        print("Transcript fetch error:", e, file=sys.stderr, flush=True)
         return None
 
 def summarize_with_openai(transcript):
