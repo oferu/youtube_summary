@@ -26,7 +26,7 @@ def get_video_title(video_id):
         return "Unknown Title"
 
 def get_transcript(video_id):
-        print("In get_transcript", file=sys.stderr, flush=True)
+    print("In get_transcript", file=sys.stderr, flush=True)
     try:
         print("Available transcripts:", file=sys.stderr, flush=True)
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
