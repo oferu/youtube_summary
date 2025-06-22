@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
-import yt_dlp
+import requests
 import re
 import openai  # Optional
 
@@ -14,29 +14,35 @@ def extract_video_id(url):
     return match.group(1) if match else None
 
 def get_video_title(video_id):
-    ydl_opts = {'quiet': True, 'skip_download': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        return info.get('title', 'Unknown Title')
-
-#def get_transcript(video_id):
-#    try:
-#        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['en'])
-#        return ' '.join([entry.text for entry in transcript])
-#    except (TranscriptsDisabled, NoTranscriptFound):
-#        return None
-#    except Exception as e:
-#        print("Error fetching transcript:", e)
-#        return None
+    try:
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        response = requests.get(oembed_url)
+        if response.status_code == 200:
+            return response.json().get('title', 'Unknown Title')
+        return "Unknown Title"
+    except Exception as e:
+        print("Title fetch error:", e)
+        return "Unknown Title"
 
 def get_transcript(video_id):
     try:
+        print("Available transcripts:")
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        for transcript in transcript_list:
+            print(f" - {transcript.language} (auto-generated: {transcript.is_generated})")
+
         transcript = transcript_list.find_transcript(['en', 'en-US'])
         return ' '.join([entry.text for entry in transcript.fetch()])
-    except (TranscriptsDisabled, NoTranscriptFound) as e:
+    except (NoTranscriptFound):
+        print("NoTranscriptFound error")
         return None
-        
+    except (TranscriptsDisabled):
+        print("TranscriptsDisabled error")
+        return None
+    except Exception as e:
+        print("Transcript fetch error:", e)
+        return None
+
 def summarize_with_openai(transcript):
     response = openai.ChatCompletion.create(
         model="gpt-4",
@@ -52,10 +58,8 @@ def summarize():
     data = request.get_json()
     if not data or 'youtube_url' not in data:
         return jsonify({'error': 'Invalid or missing JSON body'}), 400
-    url = data.get('youtube_url')
-    if not url:
-        return jsonify({'error': 'Missing youtube_url'}), 400
 
+    url = data['youtube_url']
     video_id = extract_video_id(url)
     if not video_id:
         return jsonify({'error': 'Invalid YouTube URL'}), 400
@@ -66,15 +70,12 @@ def summarize():
     if not transcript:
         return jsonify({'error': 'Transcript not available'}), 404
 
-    # If you want just the transcript:
+    # Return full transcript with title
     return jsonify({'title': title, 'transcript': transcript})
 
-    # Or if you want the summary:
+    # Or return summarized transcript:
     # summary = summarize_with_openai(transcript)
     # return jsonify({'title': title, 'summary': summary})
-
-#if __name__ == '__main__':
-#    app.run(debug=True)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
