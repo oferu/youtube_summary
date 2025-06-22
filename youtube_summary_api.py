@@ -45,7 +45,7 @@ def get_transcript(video_id):
         transcript_list = ytt_api.list_transcripts(video_id)
         
         
-        //transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+#        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         for transcript in transcript_list:
             print(f" - {transcript.language} (auto-generated: {transcript.is_generated})", file=sys.stderr, flush=True)
 
