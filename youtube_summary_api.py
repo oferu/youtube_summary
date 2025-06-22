@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+from youtube_transcript_api.proxies import GenericProxyConfig
 import requests
 import re
 import openai  # Optional
@@ -29,7 +30,22 @@ def get_transcript(video_id):
     print("In get_transcript", file=sys.stderr, flush=True)
     try:
         print("Available transcripts:", file=sys.stderr, flush=True)
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        
+#        proxy = GenericProxyConfig(
+#            http_url="http://user:pass@my-custom-proxy.org:port",
+#            https_url="https://user:pass@my-custom-proxy.org:port",
+#        )
+#        ytt_api = YouTubeTranscriptApi(proxy_config=proxy)
+        ytt_api = YouTubeTranscriptApi(
+            proxy_config=GenericProxyConfig(
+                http_url="http://user:pass@my-custom-proxy.org:port",
+                https_url="https://user:pass@my-custom-proxy.org:port",
+        )
+)
+        transcript_list = ytt_api.list_transcripts(video_id)
+        
+        
+        //transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         for transcript in transcript_list:
             print(f" - {transcript.language} (auto-generated: {transcript.is_generated})", file=sys.stderr, flush=True)
 
